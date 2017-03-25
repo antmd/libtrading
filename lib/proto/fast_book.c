@@ -80,6 +80,7 @@ static int md_increment(struct fast_book *book, struct fast_message *msg)
 	case FAST_TYPE_STRING:
 	case FAST_TYPE_VECTOR:
 	case FAST_TYPE_SEQUENCE:
+    case FAST_TYPE_GROUP:
 	default:
 		goto fail;
 	}

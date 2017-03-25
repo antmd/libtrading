@@ -85,6 +85,9 @@ static int fast_type_init(xmlNodePtr node, struct fast_field *field)
 	else if (!xmlStrcmp(node->name, (const xmlChar *)"sequence") ||
 			!xmlStrcmp(node->name, (const xmlChar *)"Sequence"))
 		field->type = FAST_TYPE_SEQUENCE;
+    else if (!xmlStrcmp(node->name, (const xmlChar *)"group") ||
+            !xmlStrcmp(node->name, (const xmlChar *)"Group") )
+        field->type = FAST_TYPE_GROUP;
 	else if (!xmlStrcmp(node->name, (const xmlChar *)"exponent") ||
 			!xmlStrcmp(node->name, (const xmlChar *)"Exponent"))
 		field->type = FAST_TYPE_INT;
@@ -239,6 +242,7 @@ static int fast_reset_init(xmlNodePtr node, struct fast_field *field)
 
 		break;
 	case FAST_TYPE_SEQUENCE:
+    case FAST_TYPE_GROUP:
 		ret = 1;
 		break;
 	default:
@@ -247,6 +251,79 @@ static int fast_reset_init(xmlNodePtr node, struct fast_field *field)
 	}
 
 	return ret;
+}
+
+static int fast_group_init(xmlNodePtr node, struct fast_field *field)
+{
+    struct fast_group *grp;
+    struct fast_message *msg;
+    struct fast_field *orig;
+    xmlNodePtr tmp;
+    int i, ret = 1;
+    int nr_fields;
+
+    field->ptr_value = calloc(1, sizeof(struct fast_group));
+    if (!field->ptr_value)
+        goto exit;
+
+    grp = field->ptr_value;
+
+    nr_fields = xmlChildElementCount(node);
+
+    node = node->xmlChildrenNode;
+    while (node && node->type != XML_ELEMENT_NODE)
+        node = node->next;
+
+    if (node == NULL)
+        goto exit;
+
+    if (fast_field_init(node, &grp->present))
+        goto exit;
+
+    if (!field_is_mandatory(field))
+        grp->present.presence = FAST_PRESENCE_OPTIONAL;
+
+    node = node->next;
+    orig = field;
+
+    msg = grp->element;
+    tmp = node;
+
+    msg->fields = calloc(nr_fields, sizeof(struct fast_field));
+    if (!msg->fields)
+        goto exit;
+
+    msg->ghtab = g_hash_table_new(g_str_hash, g_str_equal);
+    if (!msg->ghtab)
+        goto exit;
+
+    msg->nr_fields = 0;
+
+    while (tmp != NULL) {
+        if (tmp->type != XML_ELEMENT_NODE) {
+            tmp = tmp->next;
+            continue;
+        }
+
+        field = msg->fields + msg->nr_fields;
+
+        if (fast_field_init(tmp, field))
+            goto exit;
+
+        if (strlen(field->name))
+            g_hash_table_insert(msg->ghtab, field->name, field);
+
+        if (pmap_required(field))
+            field_add_flags(orig, FAST_FIELD_FLAGS_PMAPREQ);
+
+        msg->nr_fields++;
+        tmp = tmp->next;
+    }
+
+    ret = 0;
+
+    exit:
+    return ret;
 }
 
 static int fast_sequence_init(xmlNodePtr node, struct fast_field *field)
@@ -437,6 +514,9 @@ static int fast_field_init(xmlNodePtr node, struct fast_field *field)
 	case FAST_TYPE_SEQUENCE:
 		ret = fast_sequence_init(node, field);
 		break;
+    case FAST_TYPE_GROUP:
+        ret = fast_group_init(node, field);
+        break;
 	default:
 		ret = 1;
 		goto exit;

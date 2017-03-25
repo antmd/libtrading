@@ -23,5 +23,6 @@ struct fcontainer *fcontainer_new(void);
 int script_read(FILE *stream, struct fcontainer *self);
 int fmsgcmp(struct fast_message *expected, struct fast_message *actual);
 int snprintseq(char *buf, size_t size, struct fast_field *field);
+int snprintgrp(char *buf, size_t size, struct fast_field *field);
 int snprintmsg(char *buf, size_t size, struct fast_message *msg);
 void fprintmsg(FILE *stream, struct fast_message *msg);

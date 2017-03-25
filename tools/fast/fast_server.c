@@ -67,6 +67,7 @@ static void fast_send_prepare(struct fast_message *msg, struct felem *elem)
 			field->decimal_value.mnt = elem_field->decimal_value.mnt;
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			break;
 		default:
 			break;
@@ -179,6 +180,7 @@ static int fast_pong_prepare(struct fast_message *tx_msg)
 		case FAST_TYPE_VECTOR:
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			break;
 		default:
 			break;

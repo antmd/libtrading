@@ -1361,6 +1361,116 @@ fail:
 	return ret;
 }
 
+static int fast_decode_group(struct buffer *buffer, struct fast_pmap *pmap, struct fast_field *field)
+{
+    struct fast_group *grp;
+    struct fast_message *msg;
+    struct fast_pmap *spmap;
+    struct fast_field *cur;
+    long spmap_bit = 0;
+    const char *start;
+    int pmap_req;
+    int ret = 0;
+
+    grp = field->ptr_value;
+    spmap = NULL;
+    msg = NULL;
+
+    if (!grp->decoded) {
+        start = buffer_start(buffer);
+        grp->decoded = 1;
+    }
+
+    pmap_req = field_has_flags(field, FAST_FIELD_FLAGS_PMAPREQ);
+    spmap = &grp->pmap;
+
+    if (pmap_req && !spmap->is_valid) {
+        start = buffer_start(buffer);
+
+        ret = parse_pmap(buffer, spmap);
+
+        if (ret)
+            goto exit;
+
+        spmap->is_valid = true;
+        spmap->pmap_bit = -1;
+    }
+
+    msg = grp->element;
+
+    for (; msg->decoded < msg->nr_fields; msg->decoded++) {
+        cur = (msg + grp->decoded)->fields + msg->decoded;
+        field = msg->fields + msg->decoded;
+        start = buffer_start(buffer);
+        spmap_bit = spmap->pmap_bit;
+
+        switch (field->type) {
+            case FAST_TYPE_INT:
+                ret = fast_decode_int(buffer, spmap, field);
+                if (ret)
+                    goto exit;
+
+                cur->int_value = field->int_value;
+                cur->state = field->state;
+                break;
+            case FAST_TYPE_UINT:
+                ret = fast_decode_uint(buffer, spmap, field);
+                if (ret)
+                    goto exit;
+
+                cur->uint_value = field->uint_value;
+                cur->state = field->state;
+                break;
+            case FAST_TYPE_STRING:
+                ret = fast_decode_string(buffer, spmap, field);
+                if (ret)
+                    goto exit;
+
+                strcpy(cur->string_value, field->string_value);
+                cur->state = field->state;
+                break;
+            case FAST_TYPE_VECTOR:
+                ret = fast_decode_vector(buffer, spmap, field);
+                if (ret)
+                    goto exit;
+                break;
+            case FAST_TYPE_DECIMAL:
+                ret = fast_decode_decimal(buffer, spmap, field);
+                if (ret)
+                    goto exit;
+
+                cur->decimal_value.exp = field->decimal_value.exp;
+                cur->decimal_value.mnt = field->decimal_value.mnt;
+                cur->state = field->state;
+                break;
+            case FAST_TYPE_SEQUENCE:
+                /* At the moment we do no support nested sequences */
+                ret = FAST_MSG_STATE_GARBLED;
+
+                if (ret)
+                    goto exit;
+                break;
+            default:
+                ret = FAST_MSG_STATE_GARBLED;
+                goto exit;
+        }
+    }
+
+    spmap->is_valid = false;
+    msg->decoded = 0;
+
+    grp->decoded = 0;
+
+    exit:
+    if (ret == FAST_MSG_STATE_PARTIAL) {
+        buffer_advance(buffer, start - buffer_start(buffer));
+
+        if (msg)
+            spmap->pmap_bit = spmap_bit;
+    }
+
+    return ret;
+}
 static int fast_decode_sequence(struct buffer *buffer, struct fast_pmap *pmap, struct fast_field *field)
 {
 	struct fast_sequence *seq;
@@ -1602,6 +1712,13 @@ struct fast_message *fast_message_decode(struct fast_session *session)
 				goto fail;
 			}
 			break;
+        case FAST_TYPE_GROUP:
+            ret = fast_decode_group(buffer, pmap, field);
+            if (ret) {
+                start = buffer_start(buffer);
+                goto fail;
+            }
+            break;
 		default:
 			ret = FAST_MSG_STATE_GARBLED;
 			goto fail;
@@ -1640,6 +1757,7 @@ struct fast_message *fast_message_new(int nr_messages)
 void fast_fields_free(struct fast_message *self)
 {
 	struct fast_sequence *seq;
+    struct fast_group *grp;
 	struct fast_field *field;
 	int i, j;
 
@@ -1650,15 +1768,22 @@ void fast_fields_free(struct fast_message *self)
 		field = self->fields + i;
 
 		if (field->type == FAST_TYPE_SEQUENCE) {
-			seq = field->ptr_value;
+            seq = field->ptr_value;
 
-			for (j = 0; j < FAST_SEQUENCE_ELEMENTS; j++) {
-				g_hash_table_destroy((seq->elements + j)->ghtab);
+            for (j = 0; j < FAST_SEQUENCE_ELEMENTS; j++) {
+                g_hash_table_destroy((seq->elements + j)->ghtab);
 
-				free((seq->elements + j)->fields);
-			}
+                free((seq->elements + j)->fields);
+            }
 
-			free(field->ptr_value);
+            free(field->ptr_value);
+
+        } else if (field->type == FAST_TYPE_GROUP) {
+                grp = field->ptr_value;
+                g_hash_table_destroy(grp->element->ghtab);
+                free(grp->element->fields);
+                free(field->ptr_value);
+
 		} else if (field->type == FAST_TYPE_DECIMAL) {
 			free(field->decimal_value.fields);
 		}
@@ -1687,6 +1812,8 @@ int fast_message_copy(struct fast_message *dst, struct fast_message *src)
 {
 	struct fast_sequence *dst_seq;
 	struct fast_sequence *src_seq;
+    struct fast_group *dst_grp;
+    struct fast_group *src_grp;
 	struct fast_field *dst_field;
 	struct fast_field *src_field;
 	int i, j;
@@ -1748,6 +1875,31 @@ int fast_message_copy(struct fast_message *dst, struct fast_message *src)
 			}
 
 			break;
+        case FAST_TYPE_GROUP:
+            memcpy(dst_field, src_field, sizeof(struct fast_field));
+
+            if (strlen(dst_field->name))
+                g_hash_table_insert(dst->ghtab, dst_field->name, dst_field);
+
+            src_grp = src_field->ptr_value;
+
+            dst_field->ptr_value = calloc(1, sizeof(struct fast_group));
+            if (!dst_field->ptr_value)
+                goto fail;
+
+            dst_grp = dst_field->ptr_value;
+
+            memcpy(dst_grp, src_grp, sizeof(struct fast_group));
+
+            if (fast_message_copy(dst_grp->element,
+                                  src_grp->element)) {
+                free((*dst_grp->element).fields);
+
+                free(dst_field->ptr_value);
+                goto fail;
+            }
+
+            break;
 		default:
 			goto fail;
 		}
@@ -1764,6 +1916,7 @@ fail:
 void fast_message_reset(struct fast_message *msg)
 {
 	struct fast_sequence *seq;
+    struct fast_group *grp;
 	struct fast_field *field;
 	int i;
 
@@ -1832,6 +1985,11 @@ void fast_message_reset(struct fast_message *msg)
 
 			fast_message_reset(seq->elements);
 			break;
+        case FAST_TYPE_GROUP:
+            grp = field->ptr_value;
+
+            fast_message_reset(grp->element);
+            break;
 		default:
 			break;
 		}
@@ -2573,6 +2731,7 @@ int fast_message_encode(struct fast_message *msg)
 				goto fail;
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			goto fail;
 		default:
 			goto fail;

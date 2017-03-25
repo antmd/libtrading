@@ -133,6 +133,7 @@ int init_elem(struct felem *elem, char *line)
 			start = end + 1;
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			goto fail;
 		default:
 			goto fail;
@@ -221,6 +222,7 @@ int fmsgcmp(struct fast_message *expected, struct fast_message *actual)
 
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			break;
 		default:
 			break;
@@ -274,6 +276,9 @@ int snprintmsg(char *buf, size_t size, struct fast_message *msg)
 		case FAST_TYPE_SEQUENCE:
 			len += snprintseq(buf + len, size - len, field);
 			break;
+        case FAST_TYPE_GROUP:
+            len += snprintgrp(buf + len, size - len, field);
+            break;
 		default:
 			break;
 		}
@@ -310,6 +315,32 @@ int snprintseq(char *buf, size_t size, struct fast_field *field)
 
 exit:
 	return len;
+}
+
+int snprintgrp(char *buf, size_t size, struct fast_field *field)
+{
+    struct fast_group *grp;
+    struct fast_message *msg;
+    int len = 0;
+
+    if (!field || field->type != FAST_TYPE_GROUP)
+        goto exit;
+
+    if (len < size)
+        len += snprintf(buf + len, size - len, "\n<group>\n");
+
+    grp = field->ptr_value;
+
+    msg = grp->element;
+
+    len += snprintmsg(buf + len, size - len, msg);
+    len += snprintf(buf + len, size - len, "\n");
+
+    if (len < size)
+        len += snprintf(buf + len, size - len, "</group>");
+
+    exit:
+    return len;
 }
 
 void fprintmsg(FILE *stream, struct fast_message *msg)

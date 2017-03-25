@@ -41,6 +41,7 @@ enum fast_type {
 	FAST_TYPE_VECTOR,
 	FAST_TYPE_DECIMAL,
 	FAST_TYPE_SEQUENCE,
+    FAST_TYPE_GROUP,
 };
 
 enum fast_op {
@@ -208,6 +209,13 @@ struct fast_sequence {
 	unsigned long decoded;
 	struct fast_field length;
 	struct fast_message elements[FAST_SEQUENCE_ELEMENTS];
+};
+
+struct fast_group {
+    struct fast_pmap pmap;
+    unsigned long decoded;
+    struct fast_field present;
+    struct fast_message element[1];
 };
 
 static inline bool pmap_is_set(struct fast_pmap *pmap, unsigned long bit)

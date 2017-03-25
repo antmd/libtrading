@@ -147,6 +147,7 @@ static int fast_ping_prepare(struct fast_message *tx_msg)
 		case FAST_TYPE_VECTOR:
 			break;
 		case FAST_TYPE_SEQUENCE:
+        case FAST_TYPE_GROUP:
 			break;
 		default:
 			break;
