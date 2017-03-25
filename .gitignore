@@ -41,3 +41,5 @@
 
 # CMake out-of-tree build
 build/*
+.idea/*
+cmake-build*/*

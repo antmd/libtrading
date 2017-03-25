@@ -1,6 +1,15 @@
 
 set(LIB_INCLUDE_FILES_DIR ${INCLUDE_FILES_DIR}/libtrading)
 
+set(DIALECTS
+    micex_fix
+    iex_fix
+    kcg_hotspot_fix
+    mbt_fix
+    cme_globex_fix
+    ice_os_fix
+)
+
 set(INCLUDE_FILES
     ${LIB_INCLUDE_FILES_DIR}/array.h
     ${LIB_INCLUDE_FILES_DIR}/buffer.h
@@ -74,6 +83,20 @@ set(SRC_FILES
     stringencoders/modp_numtoa.c
     compat/clock_gettime.c
     )
+
+find_package(PythonInterp REQUIRED)
+
+foreach(DIALECT ${DIALECTS})
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/proto/${DIALECT}.c"
+            COMMAND ${PYTHON_EXECUTABLE} ../tools/fix/fixdialectc 
+                --input "proto/${DIALECT}.dialect"
+                --header-path ${LIB_INCLUDE_FILES_DIR}/proto 
+                --source-path ${CMAKE_CURRENT_SOURCE_DIR}/proto
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+
+        )
+endforeach()
 
 find_package(GLIB REQUIRED)
 find_package(LibXml2 REQUIRED)
