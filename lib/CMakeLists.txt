@@ -81,19 +81,23 @@ set(SRC_FILES
     proto/xdp_message.c
     proto/lse_itch_message.c
     stringencoders/modp_numtoa.c
-    compat/clock_gettime.c
     )
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(SRC_FILES "${SRC_FILES};compat/clock_gettime.c")
+endif()
 
 find_package(PythonInterp REQUIRED)
 
 foreach(DIALECT ${DIALECTS})
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/proto/${DIALECT}.c"
-            COMMAND ${PYTHON_EXECUTABLE} ../tools/fix/fixdialectc 
-                --input "proto/${DIALECT}.dialect"
-                --header-path ${LIB_INCLUDE_FILES_DIR}/proto 
-                --source-path ${CMAKE_CURRENT_SOURCE_DIR}/proto
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+               "${LIB_INCLUDE_FILES_DIR}/proto/${DIALECT}.h"
+        COMMAND ${PYTHON_EXECUTABLE} ../tools/fix/fixdialectc 
+            --input "proto/${DIALECT}.dialect"
+            --header-path ${LIB_INCLUDE_FILES_DIR}/proto 
+            --source-path ${CMAKE_CURRENT_SOURCE_DIR}/proto
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 
         )
 endforeach()
@@ -103,6 +107,10 @@ find_package(LibXml2 REQUIRED)
 
 add_library(libtrading ${SRC_FILES} ${INCLUDE_FILES})
 set_target_properties(libtrading PROPERTIES PREFIX "")
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    target_compile_definitions(libtrading PUBLIC _GNU_SOURCE=1)
+endif()
 
 target_include_directories(libtrading PUBLIC 
     ${INCLUDE_FILES_DIR}

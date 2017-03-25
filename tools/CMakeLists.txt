@@ -46,6 +46,7 @@ target_link_libraries(fast_client PUBLIC
 	${LIBXML2_LIBRARIES}
 	${GLIB_LIBRARIES}
 	${ZLIB_LIBRARIES}
+    -lm
 	)
 
 
@@ -122,6 +123,7 @@ target_link_libraries(fix_client PUBLIC
 	libtrading
 	${LIBEVENT_LIB}
 	${ZLIB_LIBRARIES}
+    -lm
 )
 
 
@@ -175,6 +177,7 @@ target_link_libraries(market PUBLIC
 	libtrading
 	${LIBEVENT_LIB}
 	${ZLIB_LIBRARIES}
+    -lm
 )
 
 
