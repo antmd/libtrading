@@ -107,7 +107,7 @@ ifeq ($(uname_S),Linux)
 endif
 
 ifeq ($(uname_S),Darwin)
-	CONFIG_OPTS += -DCONFIG_NEED_CLOCK_GETTIME=1
+	# CONFIG_OPTS += -DCONFIG_NEED_CLOCK_GETTIME=1
 	COMPAT_OBJS += lib/compat/clock_gettime.o
 	export LIBRARY_PATH = /usr/local/lib
 	INCLUDES += -I/usr/local/include

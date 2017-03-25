@@ -38,3 +38,6 @@
 /lib/proto/micex_fix.c
 /lib/proto/cme_globex_fix.c
 /lib/proto/ice_os_fix.c
+
+# CMake out-of-tree build
+build/*
